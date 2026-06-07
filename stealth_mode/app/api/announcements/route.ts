@@ -4,6 +4,7 @@ import { publicClient, STEALTH_CONTRACT, STEALTH_DEPLOY_BLOCK, txUrl } from "@/l
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30; // allow longer log scans on serverless
 
 const ev = parseAbiItem(
   "event Announcement(uint256 indexed schemeId, address indexed stealthAddress, address indexed sender, bytes ephemeralPubKey, bytes1 viewTag, uint256 amount)"
@@ -11,7 +12,10 @@ const ev = parseAbiItem(
 type Ann = Log<bigint, number, false, typeof ev>;
 
 const SPAN = 99n;
-const BATCH = 8;
+const BATCH = 4; // keep concurrent eth_getLogs well under the RPC's 25/sec cap
+// On a cold serverless invocation (no in-memory cache) scan only recent blocks so we
+// fit the function time limit; the in-memory cache then extends coverage on warm calls.
+const COLD_LOOKBACK = 3000n;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let cache: { logs: Ann[]; last: bigint } | null = null;
@@ -40,6 +44,7 @@ async function fetchWindows(from: bigint, to: bigint): Promise<Ann[]> {
   for (let i = 0; i < ranges.length; i += BATCH) {
     const res = await Promise.all(ranges.slice(i, i + BATCH).map(([a, b]) => windowLogs(a, b)));
     for (const r of res) out.push(...r);
+    if (i + BATCH < ranges.length) await sleep(200); // throttle to stay under the RPC rate limit
   }
   return out;
 }
@@ -54,7 +59,11 @@ export async function GET() {
   try {
     const snapshot = cache;
     const latest = await publicClient.getBlockNumber();
-    const from = snapshot ? snapshot.last + 1n : STEALTH_DEPLOY_BLOCK;
+    const coldStart =
+      latest > COLD_LOOKBACK && latest - COLD_LOOKBACK > STEALTH_DEPLOY_BLOCK
+        ? latest - COLD_LOOKBACK
+        : STEALTH_DEPLOY_BLOCK;
+    const from = snapshot ? snapshot.last + 1n : coldStart;
     const fresh = from <= latest ? await fetchWindows(from, latest) : [];
 
     const byKey = new Map<string, Ann>();

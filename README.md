@@ -6,7 +6,7 @@
 > unrelated random addresses. Built fresh on **Monad Testnet** with **stealth addresses (ERC-5564)**
 > — and it works for many agents at once, each one's payments unlinkable.
 
-📂 Full project code: [`./stealth_mode`](./stealth_mode) · 🎥 Demo video: _add link_ · 🌐 Live app: _deploying_
+📂 Full project code: [`./stealth_mode`](./stealth_mode) · 🎥 Demo video: _add link_ · 🌐 Live app: **https://stealthmode-green.vercel.app**
 
 ## The problem
 A blockchain is a public ledger — anyone can see who paid whom, the amounts, and link a recipient's
